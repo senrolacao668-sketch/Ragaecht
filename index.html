@@ -1,1 +1,926 @@
-<!DOCTYPE html> <html lang="pt-BR"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"> <title>Reggae - Seu Assistente Pessoal</title> <script src="https://cdn.tailwindcss.com"></script> <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet"> <script> tailwind.config = { theme: { extend: { colors: { primary: '#075E54', secondary: '#128C7E', incoming: '#FFFFFF', outgoing: '#DCF8C6', background: '#E5DDD5', } } } } </script> <style> .chat-bubble-in { @apply bg-white rounded-3xl rounded-tl-none p-4 max-w-[82%] shadow-md break-words; } .chat-bubble-out { @apply bg-outgoing rounded-3xl rounded-tr-none p-4 max-w-[82%] shadow-md ml-auto break-words; } .audio-player { @apply flex items-center gap-3 bg-gray-100 rounded-2xl p-3 my-2 w-full max-w-xs shadow-sm; } </style> </head> <body class="bg-background font-sans text-gray-800 min-h-screen flex flex-col"> <header class="bg-primary text-white p-4 shadow-md sticky top-0 z-10"> <div class="flex items-center justify-between"> <div class="flex items-center gap-3"> <button id="menuBtn" class="text-2xl hover:scale-110 transition"><i class="fa fa-bars"></i></button> <div> <h1 class="text-2xl font-bold">Reggae 🤖</h1> <p class="text-xs opacity-75 -mt-1">Sempre em movimento</p> </div> </div> <div class="flex gap-5 text-xl"> <button id="foldersBtn"><i class="fa fa-folder-open"></i></button> <button id="configBtn"><i class="fa fa-cog"></i></button> </div> </div> </header> <main id="chatArea" class="flex-1 overflow-y-auto p-4 space-y-4 pb-24"></main> <footer class="bg-white border-t p-3 sticky bottom-0 z-10"> <div class="max-w-3xl mx-auto flex items-end gap-2"> <button id="attachBtn" class="p-3 text-gray-600 hover:text-secondary"><i class="fa fa-paperclip text-2xl"></i></button> <input type="file" id="fileInput" multiple class="hidden"> <div class="flex-1 bg-gray-100 rounded-3xl px-5 py-2"> <textarea id="messageInput" rows="1" class="w-full bg-transparent outline-none resize-none text-base" placeholder="Digite uma mensagem..."></textarea> </div> <button id="recordBtn" class="p-3 text-gray-600 hover:text-red-500"><i class="fa fa-microphone text-2xl"></i></button> <button id="sendBtn" class="bg-secondary hover:bg-primary text-white p-4 rounded-3xl"><i class="fa fa-paper-plane"></i></button> </div> </footer> <!-- Menu Lateral --> <div id="sideMenu" class="fixed inset-0 bg-black/70 hidden z-50"> <div class="bg-white w-80 h-full ml-auto shadow-2xl p-6 overflow-y-auto"> <div class="flex justify-between mb-8"> <h2 class="text-3xl font-bold text-primary">Menu Reggae</h2> <button onclick="closeSideMenu()" class="text-3xl text-gray-400 hover:text-gray-600">✕</button> </div> <div class="space-y-2"> <button onclick="exportarBackup()" class="w-full text-left px-4 py-4 hover:bg-gray-100 rounded-2xl flex items-center gap-3"><i class="fa fa-download"></i> Exportar Backup</button> <button onclick="buscarNoHistorico()" class="w-full text-left px-4 py-4 hover:bg-gray-100 rounded-2xl flex items-center gap-3"><i class="fa fa-search"></i> Buscar no Histórico</button> <button onclick="mostrarAjuda()" class="w-full text-left px-4 py-4 hover:bg-gray-100 rounded-2xl flex items-center gap-3"><i class="fa fa-question-circle"></i> Ajuda</button> </div> </div> </div> <!-- Painel de Pastas --> <div id="foldersPanel" class="fixed inset-0 bg-black/50 z-50 hidden"> <div class="bg-white h-full w-full max-w-md ml-auto p-5 overflow-y-auto"> <div class="flex justify-between mb-6"> <h3 class="text-2xl font-bold text-primary">📁 Suas Pastas</h3> <button id="closeFolders" class="text-3xl text-gray-400 hover:text-gray-600">✕</button> </div> <button id="newFolderBtn" class="w-full bg-secondary text-white py-3 rounded-2xl mb-6 flex items-center justify-center gap-2"><i class="fa fa-plus"></i> Nova Pasta</button> <div id="foldersList" class="space-y-4"></div> </div> </div> <!-- Painel de Configurações --> <div id="configPanel" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4"> <div class="bg-white w-full max-w-sm rounded-3xl p-6 relative"> <button id="closeConfig" class="absolute top-4 right-4 text-3xl text-gray-400 hover:text-gray-600">✕</button> <h3 class="text-2xl font-bold text-primary mb-6">⚙️ Configurações</h3> <button id="limparChatBtn" class="w-full py-4 bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-2xl mb-3">🧹 Limpar Chat</button> <button id="limparTudoBtn" class="w-full py-4 bg-red-50 border border-red-300 text-red-800 rounded-2xl">⚠️ Apagar Tudo</button> <div class="flex justify-between items-center mt-8"> <span class="text-lg">🔊 Voz para leitura</span> <input type="checkbox" id="usarVoz" checked class="w-5 h-5 accent-secondary"> </div> </div> </div> <script> let db, conhecimento = [], gravador, audioChunks = [], vozAtiva = true, isRecording = false; async function initDB() { return new Promise(resolve => { const req = indexedDB.open("ReggaeDB", 6); req.onupgradeneeded = e => { db = e.target.result; if (!db.objectStoreNames.contains("conhecimento")) { db.createObjectStore("conhecimento", { autoIncrement: true }); } }; req.onsuccess = e => { db = e.target.result; carregarConhecimento(); resolve(); }; req.onerror = () => resolve(); }); } function carregarConhecimento() { const tx = db.transaction("conhecimento", "readonly"); tx.objectStore("conhecimento").getAll().onsuccess = e => { conhecimento = e.target.result || []; }; } function salvarConhecimento(texto, tipo = "texto") { if (!texto?.trim()) return; const item = { texto, tipo, data: new Date() }; db.transaction("conhecimento", "readwrite").objectStore("conhecimento").add(item); conhecimento.push(item); } function calcularSimilaridade(query, texto) { const q = query.toLowerCase().trim(); const t = texto.toLowerCase(); if (t.includes(q)) return 12; const score = q.split(/\s+/).filter(p => p.length > 2 && t.includes(p)).length * 4; return score; } function melhorMatch(mensagem) { let melhor = { score: 0, texto: "" }; conhecimento.forEach(item => { const score = calcularSimilaridade(mensagem, item.texto); if (score > melhor.score) melhor = { score, texto: item.texto }; }); return melhor.score >= 4 ? melhor.texto : null; } function gerarResposta(msg) { const match = melhorMatch(msg); if (match) return `Encontrei isso: "${match}" 📚`; if (/oi|olá|bom dia|boa tarde|boa noite/.test(msg.toLowerCase())) return "Fala meu parceiro! Tô na paz 🔥"; return "Entendi! Guardei e tô aprendendo com você. Manda mais! 🚀"; } function adicionarMensagem(texto, remetente = "usuario", tipo = "texto", dados = null) { const chat = document.getElementById("chatArea"); const div = document.createElement("div"); div.className = remetente === "usuario" ? "chat-bubble-out" : "chat-bubble-in"; if (tipo === "texto") { div.innerHTML = `<p class="whitespace-pre-wrap">${texto}</p>`; if (remetente === "reggae") { const btn = document.createElement("button"); btn.className = "copiar-btn text-xs text-secondary mt-2 flex items-center gap-1"; btn.innerHTML = `<i class="fa fa-copy"></i> Copiar`; btn.addEventListener("click", () => navigator.clipboard.writeText(texto)); div.appendChild(btn); } } else if (tipo === "imagem") { div.innerHTML = `<img src="${dados}" class="rounded-2xl max-w-full mt-1">`; } else if (tipo === "audio") { div.innerHTML = `<div class="audio-player"><i class="fa fa-play-circle text-3xl text-secondary"></i><audio controls src="${dados}" class="w-full"></audio></div>`; } else if (tipo === "arquivo") { div.innerHTML = `<a href="${dados.url}" download="${dados.nome}" class="text-secondary underline flex items-center gap-2"><i class="fa fa-file"></i> ${dados.nome}</a>`; } chat.appendChild(div); chat.scrollTop = chat.scrollHeight; } function mostrarPensando() { const chat = document.getElementById("chatArea"); const div = document.createElement("div"); div.id = "pensando"; div.className = "chat-bubble-in italic text-gray-500"; div.textContent = "Reggae pensando..."; chat.appendChild(div); chat.scrollTop = chat.scrollHeight; return div; } async function enviarMensagem() { const input = document.getElementById("messageInput"); const texto = input.value.trim(); if (!texto) return; adicionarMensagem(texto, "usuario"); salvarConhecimento(texto); input.value = ""; input.style.height = "auto"; const pensando = mostrarPensando(); setTimeout(() => { pensando.remove(); const resposta = gerarResposta(texto); adicionarMensagem(resposta, "reggae"); if (vozAtiva) { const u = new SpeechSynthesisUtterance(resposta); u.lang = "pt-BR"; speechSynthesis.speak(u); } }, 800); } function enviarArquivos(arquivos) { for (const arq of arquivos) { const reader = new FileReader(); reader.onload = e => { let tipo = "arquivo"; if (arq.type.startsWith("image/")) tipo = "imagem"; else if (arq.type.startsWith("audio/")) tipo = "audio"; const dados = tipo === "arquivo" ? { nome: arq.name, url: e.target.result } : e.target.result; adicionarMensagem(arq.name, "usuario", tipo, dados); salvarConhecimento(`Arquivo: ${arq.name}`, tipo); }; reader.readAsDataURL(arq); } } async function iniciarPararGravacao() { const btn = document.getElementById("recordBtn"); if (!isRecording) { try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); gravador = new MediaRecorder(stream); audioChunks = []; gravador.ondataavailable = e => audioChunks.push(e.data); gravador.onstop = () => { const blob = new Blob(audioChunks, { type: "audio/webm" }); const url = URL.createObjectURL(blob); adicionarMensagem("Áudio gravado", "usuario", "audio", url); salvarConhecimento("Gravação de áudio", "audio"); gravador.stream.getTracks().forEach(t => t.stop()); }; gravador.start(); isRecording = true; btn.classList.add("animate-pulse"); btn.innerHTML = `<i class="fa fa-stop text-red-500 text-2xl"></i>`; } catch (err) { alert("Erro ao acessar microfone."); } } else { gravador.stop(); isRecording = false; btn.classList.remove("animate-pulse"); btn.innerHTML = `<i class="fa fa-microphone text-2xl"></i>`; } } function exportarBackup() { const backup = { conhecimento, timestamp: new Date().toISOString() }; const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `reggae-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); closeSideMenu(); } function buscarNoHistorico() { const termo = prompt("Digite o termo para buscar:"); if (!termo) return; const res = conhecimento.filter(k => k.texto.toLowerCase().includes(termo.toLowerCase())); alert(res.length ? res.map(r => r.texto).join("\n\n") : "Nada encontrado."); } function mostrarAjuda() { alert("Reggae v1.4\nTudo salvo localmente no seu navegador.\n\n✅ Envie textos, imagens, áudios e arquivos\n🎤 Grave áudio direto pelo microfone\n📁 Organize em pastas\n💾 Exporte backup JSON"); } function closeSideMenu() { document.getElementById("sideMenu").classList.add("hidden"); } function autoGrow() { const ta = document.getElementById("messageInput"); ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 128) + "px"; } window.addEventListener("load", () => { initDB(); const input = document.getElementById("messageInput"); input.addEventListener("input", autoGrow); input.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviarMensagem(); } }); document.getElementById("sendBtn").addEventListener("click", enviarMensagem); document.getElementById("attachBtn").addEventListener("click", () => document.getElementById("fileInput").click()); document.getElementById("fileInput").addEventListener("change", e => { enviarArquivos(e.target.files); e.target.value = ""; }); document.getElementById("recordBtn").addEventListener("click", iniciarPararGravacao); document.getElementById("menuBtn").addEventListener("click", () => document.getElementById("sideMenu").classList.toggle("hidden")); document.getElementById("foldersBtn").addEventListener("click", () => document.getElementById("foldersPanel").classList.remove("hidden")); document.getElementById("configBtn").addEventListener("click", () => document.getElementById("configPanel").classList.remove("hidden")); document.getElementById("closeFolders").addEventListener("click", () => document.getElementById("foldersPanel").classList.add("hidden")); document.getElementById("closeConfig").addEventListener("click", () => document.getElementById("configPanel").classList.add("hidden")); document.getElementById("sideMenu").addEventListener("click", e => { if (e.target === document.getElementById("sideMenu")) closeSideMenu(); }); document.getElementById("newFolderBtn").addEventListener("click", () => { const nome = prompt("Nome da nova pasta:"); if (nome?.trim()) { const div = document.createElement("div"); div.className = "p-4 bg-white rounded-2xl shadow border-l-4 border-secondary"; div.innerHTML = `<h4 class="font-semibold">${nome.trim()}</h4><p class="text-xs text-gray-500">Pasta vazia</p>`; document.getElementById("foldersList").appendChild(div); } }); document.getElementById("limparChatBtn").addEventListener("click", () => { if (confirm("Limpar chat?")) { document.getElementById("chatArea").innerHTML = ""; document.getElementById("configPanel").classList.add("hidden"); adicionarMensagem("Chat limpo! Bora recomeçar 🔥", "reggae"); } }); document.getElementById("limparTudoBtn").addEventListener("click", () => { if (confirm("Apagar tudo? Isso remove todo o histórico salvo.")) { indexedDB.deleteDatabase("ReggaeDB"); location.reload(); } }); document.getElementById("usarVoz").addEventListener("change", e => vozAtiva = e.target.checked); adicionarMensagem("Fala meu parceiro! Tô pronto pra guardar tudo e te ajudar. Manda ver! 🚀", "reggae"); }); </script> </body> </html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DiamanteBlack 💎</title>
+<style>
+  /* ── Tokens cyberpunk ── */
+  :root {
+    --bg:        #0a0a0f;
+    --bg2:       #12121a;
+    --bg3:       #1a1a2e;
+    --neon:      #b44fff;
+    --neon2:     #7f00ff;
+    --cyan:      #00f0ff;
+    --pink:      #ff2d78;
+    --text:      #e8e0f8;
+    --muted:     #6b6080;
+    --bubble-in: #1e1e30;
+    --bubble-out:#2a1540;
+    --border:    #2e2060;
+    --radius:    18px;
+    --font-ui:   'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--neon2); border-radius: 4px; }
+
+  /* ── Neon glow util ── */
+  .glow  { text-shadow: 0 0 8px var(--neon), 0 0 22px var(--neon2); }
+  .glow-c{ text-shadow: 0 0 8px var(--cyan), 0 0 20px var(--cyan); }
+
+  /* ════ HEADER ════ */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--neon2), var(--cyan), var(--pink));
+  }
+  .logo {
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--neon), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .logo-sub {
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    -webkit-text-fill-color: var(--muted);
+  }
+  .hbtn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 6px;
+    transition: color .2s;
+  }
+  .hbtn:hover { color: var(--neon); }
+  .hbtns { display: flex; gap: 4px; }
+
+  /* ════ CHAT AREA ════ */
+  #chatArea {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 10% 10%, rgba(127,0,255,.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 90% 90%, rgba(0,240,255,.04) 0%, transparent 50%);
+  }
+
+  /* ── Bubbles ── */
+  .bubble {
+    max-width: 82%;
+    padding: 12px 16px;
+    line-height: 1.55;
+    font-size: 0.93rem;
+    word-break: break-word;
+    position: relative;
+  }
+  .bubble-in {
+    background: var(--bubble-in);
+    border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) var(--radius) 4px;
+    align-self: flex-start;
+  }
+  .bubble-in::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -1px;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--neon), var(--neon2));
+    border-radius: 3px 0 0 3px;
+  }
+  .bubble-out {
+    background: var(--bubble-out);
+    border: 1px solid rgba(180,79,255,.3);
+    border-radius: var(--radius) var(--radius) 4px var(--radius);
+    align-self: flex-end;
+  }
+
+  .copy-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color .2s;
+  }
+  .copy-btn:hover { color: var(--cyan); }
+
+  /* score tag */
+  .score-tag {
+    font-size: 0.65rem;
+    color: var(--neon);
+    opacity: .7;
+    margin-top: 4px;
+  }
+
+  /* thinking */
+  .thinking {
+    color: var(--muted);
+    font-style: italic;
+    font-size: .88rem;
+    align-self: flex-start;
+    padding: 10px 14px;
+    background: var(--bg2);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+  /* image / audio / file */
+  .bubble img { border-radius: 12px; max-width: 100%; margin-top: 4px; }
+  .audio-wrap { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .audio-wrap audio { width: 100%; }
+  .file-link { color: var(--cyan); text-decoration: none; display: flex; align-items: center; gap: 6px; }
+  .file-link:hover { text-decoration: underline; }
+
+  /* ════ FOOTER ════ */
+  footer {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 10px 12px;
+    flex-shrink: 0;
+  }
+  .input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .input-box {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    padding: 10px 16px;
+    transition: border-color .2s;
+  }
+  .input-box:focus-within { border-color: var(--neon2); }
+  #messageInput {
+    width: 100%;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 0.95rem;
+    resize: none;
+    max-height: 120px;
+    field-sizing: content;
+    font-family: var(--font-ui);
+  }
+  #messageInput::placeholder { color: var(--muted); }
+
+  .ftn-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 8px;
+    font-size: 1.2rem;
+    transition: color .2s, transform .15s;
+  }
+  .ftn-btn:hover { color: var(--neon); transform: scale(1.15); }
+
+  .send-btn {
+    background: linear-gradient(135deg, var(--neon2), var(--pink));
+    border: none;
+    border-radius: 50%;
+    width: 44px; height: 44px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: transform .15s, box-shadow .2s;
+    flex-shrink: 0;
+  }
+  .send-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 14px var(--neon);
+  }
+
+  /* ════ PANELS / OVERLAYS ════ */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.75);
+    z-index: 50;
+    display: none;
+  }
+  .overlay.show { display: flex; }
+
+  /* side panel */
+  .side-panel {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    width: 300px;
+    height: 100%;
+    padding: 24px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .panel-title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    background: linear-gradient(90deg, var(--neon), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .menu-item {
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 12px 14px;
+    border-radius: 12px;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: .95rem;
+    transition: background .2s, color .2s;
+  }
+  .menu-item:hover { background: var(--bg3); color: var(--neon); }
+  .menu-item .ico { font-size: 1.1rem; width: 22px; text-align: center; }
+
+  /* right panel (folders / config) */
+  .right-panel {
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    width: min(360px, 100vw);
+    height: 100%;
+    margin-left: auto;
+    padding: 24px 20px;
+    overflow-y: auto;
+  }
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: color .2s;
+  }
+  .close-btn:hover { color: var(--pink); }
+
+  /* centered modal */
+  .modal-center {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: min(360px, 92vw);
+    margin: auto;
+    position: relative;
+  }
+
+  /* generic card */
+  .card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+
+  /* action button */
+  .action-btn {
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    padding: 13px;
+    cursor: pointer;
+    font-size: .92rem;
+    font-weight: 600;
+    transition: opacity .2s, box-shadow .2s;
+    margin-bottom: 10px;
+  }
+  .action-btn:hover { opacity: .85; }
+  .btn-purple { background: linear-gradient(135deg, var(--neon2), var(--neon)); color: #fff; }
+  .btn-cyan   { background: linear-gradient(135deg, #007aaa, var(--cyan)); color: #000; }
+  .btn-red    { background: linear-gradient(135deg, #7a0020, var(--pink)); color: #fff; }
+  .btn-yellow { background: linear-gradient(135deg, #6b4f00, #ffd700); color: #000; }
+
+  /* toggle */
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+  .toggle-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--neon); cursor: pointer; }
+
+  /* folder card */
+  .folder-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--neon2);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .folder-card h4 { font-weight: 700; font-size: .95rem; }
+  .folder-card p  { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+
+  /* search highlight */
+  mark { background: rgba(180,79,255,.3); color: var(--neon); border-radius: 3px; padding: 0 2px; }
+
+  /* recording pulse */
+  @keyframes rec { 0%,100%{box-shadow:0 0 0 0 rgba(255,45,120,.7)} 50%{box-shadow:0 0 0 10px rgba(255,45,120,0)} }
+  .recording { animation: rec 1s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ HEADER ════════════════════ -->
+<header>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="hbtn" id="menuBtn" aria-label="Menu">☰</button>
+    <div>
+      <div class="logo">💎 DIAMANTE BLACK</div>
+      <div class="logo-sub">Motor RAG Local · Offline</div>
+    </div>
+  </div>
+  <div class="hbtns">
+    <button class="hbtn" id="foldersBtn" aria-label="Pastas" title="Pastas">📁</button>
+    <button class="hbtn" id="configBtn"  aria-label="Configs" title="Configurações">⚙️</button>
+  </div>
+</header>
+
+<!-- ════════════════════ CHAT ════════════════════ -->
+<main id="chatArea"></main>
+
+<!-- ════════════════════ FOOTER ════════════════════ -->
+<footer>
+  <div class="input-row">
+    <button class="ftn-btn" id="attachBtn" aria-label="Anexar">📎</button>
+    <input type="file" id="fileInput" multiple style="display:none">
+    <div class="input-box">
+      <textarea id="messageInput" rows="1" placeholder="Manda ver…"></textarea>
+    </div>
+    <button class="ftn-btn" id="recordBtn" aria-label="Gravar">🎙️</button>
+    <button class="send-btn" id="sendBtn" aria-label="Enviar">➤</button>
+  </div>
+</footer>
+
+<!-- ════════════════════ MENU LATERAL ════════════════════ -->
+<div class="overlay" id="sideMenu">
+  <div class="side-panel">
+    <div class="panel-title">💎 MENU</div>
+    <button class="menu-item" onclick="exportarBackup()"><span class="ico">💾</span> Exportar Backup</button>
+    <button class="menu-item" onclick="importarBackup()"><span class="ico">📥</span> Importar Backup</button>
+    <button class="menu-item" onclick="buscarNoHistorico()"><span class="ico">🔍</span> Buscar no Histórico</button>
+    <button class="menu-item" onclick="verEstatisticas()"><span class="ico">📊</span> Estatísticas</button>
+    <button class="menu-item" onclick="mostrarAjuda()"><span class="ico">❓</span> Ajuda</button>
+    <div style="margin-top:auto;padding-top:20px;color:var(--muted);font-size:.75rem">
+      v2.0 · RAG TF-IDF · 100% offline
+    </div>
+  </div>
+  <div style="flex:1" onclick="closeSideMenu()"></div>
+</div>
+
+<!-- ════════════════════ PASTAS ════════════════════ -->
+<div class="overlay" id="foldersPanel" style="justify-content:flex-end">
+  <div class="right-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <span class="panel-title" style="margin-bottom:0">📁 Pastas</span>
+      <button class="close-btn" id="closeFolders">✕</button>
+    </div>
+    <button class="action-btn btn-purple" id="newFolderBtn">+ Nova Pasta</button>
+    <div id="foldersList"></div>
+  </div>
+</div>
+
+<!-- ════════════════════ CONFIGURAÇÕES ════════════════════ -->
+<div class="overlay" id="configPanel">
+  <div class="modal-center">
+    <button class="close-btn" id="closeConfig" style="position:absolute;top:16px;right:16px">✕</button>
+    <div class="panel-title" style="margin-bottom:20px">⚙️ Configurações</div>
+
+    <button class="action-btn btn-yellow" id="limparChatBtn">🧹 Limpar Chat</button>
+    <button class="action-btn btn-red"    id="limparTudoBtn">⚠️ Apagar Tudo</button>
+
+    <div class="toggle-row">
+      <span>🔊 Voz para leitura</span>
+      <input type="checkbox" id="usarVoz" checked>
+    </div>
+    <div class="toggle-row" style="margin-top:10px">
+      <span>🧠 Salvar msgs no conhecimento</span>
+      <input type="checkbox" id="autoLearn" checked>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ BUSCA MODAL ════════════════════ -->
+<div class="overlay" id="searchPanel">
+  <div class="modal-center" style="width:min(500px,96vw)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span class="panel-title" style="margin-bottom:0">🔍 Busca no Histórico</span>
+      <button class="close-btn" onclick="closeOverlay('searchPanel')">✕</button>
+    </div>
+    <div class="input-box" style="margin-bottom:12px">
+      <textarea id="searchInput" rows="1" placeholder="Buscar…" style="width:100%;background:none;border:none;outline:none;color:var(--text);font-size:.95rem;resize:none;font-family:var(--font-ui)"></textarea>
+    </div>
+    <button class="action-btn btn-purple" onclick="executarBusca()" style="margin-bottom:16px">Buscar</button>
+    <div id="searchResults" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+</div>
+
+<!-- ════════════════════ SCRIPT ════════════════════ -->
+<script>
+/* ══════════════════════════════════════════════════
+   ESTADO GLOBAL
+══════════════════════════════════════════════════ */
+let db;
+let conhecimento = [];
+let pastas = [];
+let gravador, audioChunks = [];
+let isRecording = false;
+let vozAtiva   = true;
+let autoLearn  = true;
+
+/* ══════════════════════════════════════════════════
+   INDEXEDDB  (v7 – schema final)
+══════════════════════════════════════════════════ */
+function initDB() {
+  return new Promise(resolve => {
+    const req = indexedDB.open('DiamanteBD', 7);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('conhecimento'))
+        d.createObjectStore('conhecimento', { keyPath:'id', autoIncrement:true });
+      if (!d.objectStoreNames.contains('pastas'))
+        d.createObjectStore('pastas', { keyPath:'id', autoIncrement:true });
+    };
+    req.onsuccess = e => {
+      db = e.target.result;
+      Promise.all([carregarConhecimento(), carregarPastas()]).then(resolve);
+    };
+    req.onerror = () => resolve();
+  });
+}
+
+function idbAll(store) {
+  return new Promise(resolve => {
+    const tx = db.transaction(store, 'readonly');
+    tx.objectStore(store).getAll().onsuccess = e => resolve(e.target.result || []);
+  });
+}
+function idbAdd(store, item) {
+  return new Promise(resolve => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).add(item);
+    req.onsuccess = e => resolve(e.target.result);
+  });
+}
+function idbDelete(store, id) {
+  return new Promise(resolve => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(id).onsuccess = resolve;
+  });
+}
+
+async function carregarConhecimento() {
+  conhecimento = await idbAll('conhecimento');
+}
+async function carregarPastas() {
+  pastas = await idbAll('pastas');
+  renderPastas();
+}
+
+/* ══════════════════════════════════════════════════
+   TF-IDF LOCAL
+══════════════════════════════════════════════════ */
+function tokenize(txt) {
+  return txt.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2);
+}
+
+function buildTF(tokens) {
+  const freq = {};
+  tokens.forEach(t => freq[t] = (freq[t]||0) + 1);
+  const len = tokens.length || 1;
+  const tf = {};
+  Object.keys(freq).forEach(k => tf[k] = freq[k] / len);
+  return tf;
+}
+
+function computeIDF(termo) {
+  const n = conhecimento.length;
+  if (!n) return 0;
+  const df = conhecimento.filter(d => d.tf && d.tf[termo]).length;
+  return Math.log((n + 1) / (df + 1)) + 1;
+}
+
+function scoreTFIDF(query, doc) {
+  if (!doc.tf) return 0;
+  return tokenize(query).reduce((s, t) => {
+    return s + (doc.tf[t] || 0) * computeIDF(t);
+  }, 0);
+}
+
+function topK(query, k = 3) {
+  return conhecimento
+    .map(d => ({ ...d, score: scoreTFIDF(query, d) }))
+    .filter(d => d.score > 0)
+    .sort((a,b) => b.score - a.score)
+    .slice(0, k);
+}
+
+/* ══════════════════════════════════════════════════
+   SALVAR CONHECIMENTO
+══════════════════════════════════════════════════ */
+async function salvarConhecimento(texto, tipo = 'texto') {
+  if (!texto?.trim()) return;
+  const tokens = tokenize(texto);
+  const item = { texto, tipo, data: new Date().toISOString(), tf: buildTF(tokens) };
+  const id = await idbAdd('conhecimento', item);
+  item.id = id;
+  conhecimento.push(item);
+}
+
+/* ══════════════════════════════════════════════════
+   GERAR RESPOSTA
+══════════════════════════════════════════════════ */
+function gerarResposta(msg) {
+  if (/^(oi|olá|ola|hey|e aí|eai|bom dia|boa tarde|boa noite)\b/i.test(msg.trim()))
+    return 'Fala meu parceiro! Sistema on, base de conhecimento pronta. Manda ver! 🔥';
+
+  if (/quantos?.*salv|quantos? registr|tamanho.*base|base.*conhecimento/i.test(msg))
+    return `Base com **${conhecimento.length}** registros indexados 💎`;
+
+  const hits = topK(msg, 3);
+
+  if (!hits.length)
+    return 'Ainda não tenho nada sobre isso na base. Mas já gravei sua mensagem pra aprender! 🚀';
+
+  if (hits.length === 1)
+    return `Encontrei isso na base (score ${hits[0].score.toFixed(3)}):\n\n"${hits[0].texto}"`;
+
+  const trechos = hits
+    .map((h, i) => `${i+1}. "${h.texto}" _(score ${h.score.toFixed(3)})_`)
+    .join('\n\n');
+  return `Encontrei ${hits.length} referências relevantes:\n\n${trechos}`;
+}
+
+/* ══════════════════════════════════════════════════
+   RENDERIZAÇÃO DE MENSAGENS
+══════════════════════════════════════════════════ */
+function adicionarMensagem(texto, remetente = 'usuario', tipo = 'texto', dados = null) {
+  const chat = document.getElementById('chatArea');
+  const div  = document.createElement('div');
+  div.className = remetente === 'usuario' ? 'bubble bubble-out' : 'bubble bubble-in';
+
+  if (tipo === 'texto') {
+    const html = texto
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/_(.*?)_/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+    div.innerHTML = `<div>${html}</div>`;
+    if (remetente !== 'usuario') {
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.innerHTML = '⎘ Copiar';
+      btn.onclick = () => { navigator.clipboard.writeText(texto); btn.innerHTML = '✓ Copiado!'; setTimeout(()=>btn.innerHTML='⎘ Copiar',2000); };
+      div.appendChild(btn);
+    }
+  } else if (tipo === 'imagem') {
+    div.innerHTML = `<img src="${dados}" alt="imagem">`;
+  } else if (tipo === 'audio') {
+    div.innerHTML = `<div class="audio-wrap">🎵 <audio controls src="${dados}" style="flex:1"></audio></div>`;
+  } else if (tipo === 'arquivo') {
+    div.innerHTML = `<a class="file-link" href="${dados.url}" download="${dados.nome}">📄 ${dados.nome}</a>`;
+  }
+
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function mostrarPensando() {
+  const chat = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.id = 'pensando';
+  div.className = 'thinking';
+  div.textContent = '💎 processando…';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+/* ══════════════════════════════════════════════════
+   ENVIO
+══════════════════════════════════════════════════ */
+async function enviarMensagem() {
+  const input = document.getElementById('messageInput');
+  const texto = input.value.trim();
+  if (!texto) return;
+
+  adicionarMensagem(texto, 'usuario');
+  if (autoLearn) await salvarConhecimento(texto);
+  input.value = '';
+  input.style.height = 'auto';
+
+  const pensando = mostrarPensando();
+  setTimeout(() => {
+    pensando.remove();
+    const resp = gerarResposta(texto);
+    adicionarMensagem(resp, 'bot');
+    if (vozAtiva) falar(resp.replace(/[*_`]/g,''));
+  }, 400);
+}
+
+function enviarArquivos(arquivos) {
+  for (const arq of arquivos) {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      let tipo = 'arquivo';
+      if (arq.type.startsWith('image/')) tipo = 'imagem';
+      else if (arq.type.startsWith('audio/')) tipo = 'audio';
+      const dados = tipo === 'arquivo' ? { nome: arq.name, url: e.target.result } : e.target.result;
+      adicionarMensagem(arq.name, 'usuario', tipo, dados);
+      await salvarConhecimento(`Arquivo: ${arq.name}`, tipo);
+    };
+    reader.readAsDataURL(arq);
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   VOZ
+══════════════════════════════════════════════════ */
+function falar(txt) {
+  if (!vozAtiva || !txt) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(txt.slice(0,300));
+  u.lang = 'pt-BR'; u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
+/* ══════════════════════════════════════════════════
+   GRAVAÇÃO DE ÁUDIO
+══════════════════════════════════════════════════ */
+async function iniciarPararGravacao() {
+  const btn = document.getElementById('recordBtn');
+  if (!isRecording) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      gravador = new MediaRecorder(stream);
+      audioChunks = [];
+      gravador.ondataavailable = e => audioChunks.push(e.data);
+      gravador.onstop = () => {
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        adicionarMensagem('🎙️ Áudio gravado', 'usuario', 'audio', url);
+        salvarConhecimento('Gravação de áudio', 'audio');
+        gravador.stream.getTracks().forEach(t => t.stop());
+      };
+      gravador.start();
+      isRecording = true;
+      btn.classList.add('recording');
+      btn.textContent = '⏹️';
+    } catch { alert('Erro ao acessar o microfone.'); }
+  } else {
+    gravador.stop();
+    isRecording = false;
+    btn.classList.remove('recording');
+    btn.textContent = '🎙️';
+  }
+}
+
+/* ══════════════════════════════════════════════════
+   PASTAS (persistentes)
+══════════════════════════════════════════════════ */
+const CORES = ['#7f00ff','#00f0ff','#ff2d78','#ffd700','#00ff9f'];
+
+function renderPastas() {
+  const el = document.getElementById('foldersList');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!pastas.length) {
+    el.innerHTML = '<p style="color:var(--muted);text-align:center;margin-top:20px">Nenhuma pasta ainda</p>';
+    return;
+  }
+  pastas.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'folder-card';
+    div.style.borderLeftColor = p.cor || 'var(--neon2)';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h4>${p.nome}</h4>
+        <button onclick="deletarPasta(${p.id})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Excluir">✕</button>
+      </div>
+      <p>criada em ${new Date(p.data).toLocaleDateString('pt-BR')}</p>
+    `;
+    el.appendChild(div);
+  });
+}
+
+async function criarPasta(nome) {
+  if (!nome?.trim()) return;
+  const p = { nome: nome.trim(), cor: CORES[pastas.length % CORES.length], data: new Date().toISOString() };
+  const id = await idbAdd('pastas', p);
+  p.id = id;
+  pastas.push(p);
+  renderPastas();
+}
+
+async function deletarPasta(id) {
+  if (!confirm('Excluir esta pasta?')) return;
+  await idbDelete('pastas', id);
+  pastas = pastas.filter(p => p.id !== id);
+  renderPastas();
+}
+
+/* ══════════════════════════════════════════════════
+   MENU / UTILIDADES
+══════════════════════════════════════════════════ */
+function closeSideMenu()        { closeOverlay('sideMenu'); }
+function closeOverlay(id)       { document.getElementById(id).classList.remove('show'); }
+function openOverlay(id)        { document.getElementById(id).classList.add('show'); }
+
+function exportarBackup() {
+  const b = { conhecimento, pastas, ts: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(b, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `diamante-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  closeSideMenu();
+}
+
+function importarBackup() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json';
+  inp.onchange = e => {
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.conhecimento) {
+          for (const item of data.conhecimento) {
+            if (!item.tf) item.tf = buildTF(tokenize(item.texto));
+            await salvarConhecimento(item.texto, item.tipo);
+          }
+        }
+        if (data.pastas) {
+          for (const p of data.pastas) await criarPasta(p.nome);
+        }
+        alert(`✅ Importados ${data.conhecimento?.length||0} registros e ${data.pastas?.length||0} pastas!`);
+      } catch { alert('Arquivo inválido.'); }
+    };
+    reader.readAsText(e.target.files[0]);
+  };
+  inp.click();
+  closeSideMenu();
+}
+
+function buscarNoHistorico() {
+  closeSideMenu();
+  openOverlay('searchPanel');
+  setTimeout(() => document.getElementById('searchInput').focus(), 50);
+}
+
+function executarBusca() {
+  const q = document.getElementById('searchInput').value.trim();
+  const out = document.getElementById('searchResults');
+  out.innerHTML = '';
+  if (!q) return;
+  const hits = topK(q, 10);
+  if (!hits.length) {
+    out.innerHTML = '<p style="color:var(--muted);text-align:center">Nada encontrado.</p>';
+    return;
+  }
+  hits.forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'card';
+    const hl = h.texto.replace(new RegExp(q,'gi'), m => `<mark>${m}</mark>`);
+    div.innerHTML = `
+      <div style="font-size:.85rem;color:var(--muted);margin-bottom:4px">${new Date(h.data).toLocaleString('pt-BR')} · score ${h.score.toFixed(3)}</div>
+      <div>${hl}</div>
+    `;
+    out.appendChild(div);
+  });
+}
+
+function verEstatisticas() {
+  closeSideMenu();
+  const tipos = {};
+  conhecimento.forEach(k => tipos[k.tipo] = (tipos[k.tipo]||0) + 1);
+  const linhas = Object.entries(tipos).map(([t,n]) => `${t}: ${n}`).join('\n');
+  alert(`📊 Estatísticas\n\nTotal de registros: ${conhecimento.length}\nPastas: ${pastas.length}\n\nPor tipo:\n${linhas||'—'}`);
+}
+
+function mostrarAjuda() {
+  closeSideMenu();
+  alert(
+    '💎 DiamanteBlack v2.0\n\n' +
+    '🧠 Motor RAG TF-IDF — 100% offline\n' +
+    '📁 Pastas persistentes no IndexedDB\n' +
+    '💾 Export/Import backup JSON\n' +
+    '🎤 Gravação de áudio\n' +
+    '📎 Envio de arquivos e imagens\n' +
+    '🔍 Busca com score por relevância\n\n' +
+    'Tudo fica salvo no seu navegador.\n' +
+    'Nenhum dado sai do seu dispositivo.'
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════ */
+window.addEventListener('load', async () => {
+  await initDB();
+
+  const inp = document.getElementById('messageInput');
+  inp.addEventListener('input', () => {
+    inp.style.height = 'auto';
+    inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensagem(); }
+  });
+
+  document.getElementById('sendBtn').addEventListener('click', enviarMensagem);
+  document.getElementById('attachBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+  document.getElementById('fileInput').addEventListener('change', e => { enviarArquivos(e.target.files); e.target.value=''; });
+  document.getElementById('recordBtn').addEventListener('click', iniciarPararGravacao);
+
+  document.getElementById('menuBtn').addEventListener('click', () => openOverlay('sideMenu'));
+  document.getElementById('foldersBtn').addEventListener('click', () => openOverlay('foldersPanel'));
+  document.getElementById('closeFolders').addEventListener('click', () => closeOverlay('foldersPanel'));
+  document.getElementById('configBtn').addEventListener('click', () => openOverlay('configPanel'));
+  document.getElementById('closeConfig').addEventListener('click', () => closeOverlay('configPanel'));
+
+  document.getElementById('newFolderBtn').addEventListener('click', () => {
+    const nome = prompt('Nome da pasta:');
+    criarPasta(nome);
+  });
+
+  document.getElementById('limparChatBtn').addEventListener('click', () => {
+    if (!confirm('Limpar o chat?')) return;
+    document.getElementById('chatArea').innerHTML = '';
+    closeOverlay('configPanel');
+    adicionarMensagem('Chat limpo. Sistema online 🔥', 'bot');
+  });
+  document.getElementById('limparTudoBtn').addEventListener('click', () => {
+    if (!confirm('Apagar TODO o conhecimento salvo? Isso não pode ser desfeito.')) return;
+    indexedDB.deleteDatabase('DiamanteBD');
+    location.reload();
+  });
+  document.getElementById('usarVoz').addEventListener('change', e => vozAtiva = e.target.checked);
+  document.getElementById('autoLearn').addEventListener('change', e => autoLearn = e.target.checked);
+
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); executarBusca(); }
+  });
+
+  adicionarMensagem(
+    `Sistema online ⚡ Base carregada com **${conhecimento.length}** registros.\nManda textos, arquivos ou áudio — tudo fica indexado localmente com TF-IDF.\nNenhum dado sai do seu dispositivo. 💎`,
+    'bot'
+  );
+});
+</script>
+</body>
+</html>
