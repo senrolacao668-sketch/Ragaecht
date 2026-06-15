@@ -4,11 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DiamanteBlack AI 💎</title>
-    <!-- Script da IA WebLLM (A leve que você pediu) -->
-    <script src="https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@latest/dist/web-llm.min.js"></script>
-    
     <style>
-        /* ── CSS CYBERPUNK (Mantido do seu design) ── */
         :root {
             --bg: #0a0a0f; --bg2: #12121a; --bg3: #1a1a2e;
             --neon: #b44fff; --neon2: #7f00ff; --cyan: #00f0ff; --pink: #ff2d78;
@@ -20,12 +16,10 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: var(--bg); color: var(--text); font-family: var(--font-ui); display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
         
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: var(--bg2); }
         ::-webkit-scrollbar-thumb { background: var(--neon2); border-radius: 4px; }
 
-        /* Header */
         header {
             background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px;
             display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; z-index: 10;
@@ -38,28 +32,21 @@
             padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border);
             display: flex; align-items: center; gap: 5px;
         }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
-        .dot.ready { background: #00ff00; box-shadow: 0 0 6px #00ff00; }
-        .dot.load { background: #ffd700; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.4; } }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #00ff00; box-shadow: 0 0 8px #00ff00; }
 
         .btn-icon { background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 8px; border-radius: 8px; transition: 0.2s; }
         .btn-icon:hover { color: var(--neon); background: rgba(255,255,255,0.05); }
 
-        /* Chat */
-        #chatArea { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }        .bubble { max-width: 85%; padding: 12px 14px; line-height: 1.5; font-size: 0.95rem; word-break: break-word; position: relative; }
+        #chatArea { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .bubble { max-width: 85%; padding: 12px 14px; line-height: 1.5; font-size: 0.95rem; word-break: break-word; position: relative; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
         .bubble-in { background: var(--bubble-in); border: 1px solid var(--border); border-radius: var(--radius) var(--radius) var(--radius) 4px; align-self: flex-start; }
         .bubble-in::before { content: ''; position: absolute; top: 0; left: -1px; width: 3px; height: 100%; background: linear-gradient(180deg, var(--neon), var(--neon2)); border-radius: 3px 0 0 3px; }
         .bubble-out { background: var(--bubble-out); border: 1px solid rgba(180,79,255,.3); border-radius: var(--radius) var(--radius) 4px var(--radius); align-self: flex-end; }
         
-        /* Audio & Files */
-        .audio-wrap { margin-top: 8px; display: flex; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 20px; }
-        .audio-wrap audio { width: 100%; height: 32px; }
-        
         .copy-btn { background: none; border: none; color: var(--muted); font-size: 0.7rem; cursor: pointer; display: block; margin-top: 4px; width: 100%; text-align: right; }
         .copy-btn:hover { color: var(--cyan); }
-
-        /* Footer */
         footer { background: var(--bg2); border-top: 1px solid var(--border); padding: 10px; flex-shrink: 0; }
         .input-row { display: flex; align-items: center; gap: 8px; max-width: 800px; margin: 0 auto; }
         
@@ -77,11 +64,7 @@
         #messageInput { width: 100%; background: none; border: none; color: var(--text); font-size: 0.95rem; padding: 10px 0; resize: none; max-height: 100px; outline: none; }
         
         .send-btn { background: linear-gradient(135deg, var(--neon2), var(--pink)); border: none; border-radius: 50%; width: 40px; height: 40px; color: white; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .rec-btn { background: none; border: none; color: var(--muted); font-size: 1.2rem; padding: 5px; cursor: pointer; }
-        .rec-btn.recording { color: var(--pink); animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
-
-        /* Painéis */
+        
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 50; display: none; backdrop-filter: blur(4px); }
         .overlay.show { display: flex; align-items: center; justify-content: center; }
         .panel-right { margin-left: auto; width: min(300px, 85vw); height: 100%; background: var(--bg2); border-left: 1px solid var(--border); padding: 20px; overflow-y: auto; }
@@ -89,128 +72,85 @@
 
         .btn-full { width: 100%; border: none; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; font-weight: bold; color: white; }
         .btn-purple { background: linear-gradient(135deg, var(--neon2), var(--neon)); }
-        .btn-cyan { background: linear-gradient(135deg, #007aaa, var(--cyan)); color: black; }
         .btn-red { background: linear-gradient(135deg, #880022, var(--pink)); }
         
-        .folder-item { background: var(--bg3); padding: 12px; margin-bottom: 8px; border-radius: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; }
+        .folder-item { background: var(--bg3); padding: 12px; margin-bottom: 8px; border-radius: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .folder-item b { color: var(--neon); cursor: pointer; }
-        
-        mark { background: rgba(180,79,255,.4); color: white; padding: 0 2px; border-radius: 3px; }
-        /* Loading Bar */
-        #progressWrap { width: 100%; background: var(--bg3); height: 6px; border-radius: 3px; margin-top: 5px; overflow: hidden; }
-        #progressBar { height: 100%; background: var(--cyan); width: 0%; transition: width 0.3s; }
     </style>
 </head>
 <body>
 
-    <!-- HEADER -->
     <header>
         <div>
             <div class="logo">💎 DIAMANTE BLACK</div>
-            <div class="logo-sub">RAG Local · TinyLlama AI</div>
+            <div class="logo-sub">RAG Cloud · Mistral Free</div>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
-            <div class="status-badge" id="aiStatus"><div class="dot load"></div> Iniciando...</div>
+            <div class="status-badge"><div class="dot"></div> Online</div>
             <button class="btn-icon" onclick="togglePanel('foldersPanel')">📁</button>
             <button class="btn-icon" onclick="togglePanel('configPanel')">⚙️</button>
         </div>
     </header>
 
-    <!-- CHAT -->
     <main id="chatArea"></main>
 
-    <!-- FOOTER -->
     <footer style="position:relative;">
-        <!-- Seletor de Pasta -->
         <select id="activeFolderSelect" class="folder-pill" onchange="setActiveFolder(this.value)">
-            <option value="">📂 Global (Todas)</option>
-        </select>
+            <option value="">📂 Global (Todas)</option>        </select>
 
         <div class="input-row">
-            <button class="btn-icon" onclick="document.getElementById('fileInput').click()">📎</button>
-            <input type="file" id="fileInput" hidden multiple>
-            
             <div class="input-box">
                 <textarea id="messageInput" rows="1" placeholder="Pergunte ou ensine algo..."></textarea>
             </div>
-            
-            <button class="rec-btn" id="recBtn" onclick="toggleRecord()">🎙️</button>
             <button class="send-btn" onclick="sendMessage()">➤</button>
         </div>
     </footer>
 
-    <!-- MODAL: PASTAS -->
+    <!-- MODAL PASTAS -->
     <div class="overlay" id="foldersPanel">
         <div class="panel-right">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h2 style="color:var(--neon)">📁 Pastas</h2>
                 <button class="btn-icon" onclick="togglePanel('foldersPanel')">✕</button>
-            </div>            <button class="btn-full btn-purple" onclick="criarPastaPrompt()">+ Nova Pasta</button>
+            </div>
+            <button class="btn-full btn-purple" onclick="criarPastaPrompt()">+ Nova Pasta</button>
             <div id="foldersList"></div>
         </div>
     </div>
 
-    <!-- MODAL: CONTEÚDO DA PASTA -->
-    <div class="overlay" id="folderContentPanel">
-        <div class="panel-center">
-            <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-                <h3 id="viewFolderTitle" style="color:var(--cyan)">Detalhes</h3>
-                <button class="btn-icon" onclick="togglePanel('folderContentPanel')">✕</button>
-            </div>
-            <div id="folderContentList"></div>
-            <button class="btn-full btn-red" id="deleteFolderBtn" style="margin-top:20px">🗑️ Apagar Pasta</button>
-        </div>
-    </div>
-
-    <!-- MODAL: CONFIG -->
+    <!-- MODAL CONFIG -->
     <div class="overlay" id="configPanel">
         <div class="panel-center">
             <button class="btn-icon" style="position:absolute; right:15px; top:15px;" onclick="togglePanel('configPanel')">✕</button>
             <h2 style="color:var(--neon); margin-bottom:20px">⚙️ Config</h2>
-            
-            <div id="progressWrap"><div id="progressBar"></div></div>
-            <button class="btn-full btn-cyan" onclick="reiniciarIA()">🔄 Recarregar Modelo IA</button>
             <button class="btn-full btn-purple" onclick="limparChat()">🧹 Limpar Tela</button>
-            <button class="btn-full btn-red" onclick="resetTotal()">⚠️ Apagar Tudo (Reset)</button>
-            
-            <div style="margin-top:20px; color:var(--muted); font-size:0.8rem;">
-                <p>🔊 Falar resposta: <input type="checkbox" id="voiceCheck" checked></p>
-                <p>🧠 Aprender tudo: <input type="checkbox" id="learnCheck" checked></p>
-            </div>
+            <button class="btn-full btn-red" onclick="resetTotal()">⚠️ Apagar Tudo</button>
+            <p style="margin-top:15px; font-size:0.7rem; color:var(--muted);">
+                Usando API gratuita HuggingFace (Mistral-7B).<br>
+                Funciona em qualquer celular sem WebGPU.
+            </p>
         </div>
     </div>
 
     <script>
-        /* ═══════════════════════════════════════════
-           1. ESTADO & VARIAVEIS
-           ═══════════════════════════════════════════ */
         let db;
-        let engine = null; // Motor da IA
-        let knowledgeBase = []; // Cache do DB
-        let folders = []; // Cache das pastas
-        let activeFolderId = null; // Pasta selecionada
-        let currentViewFolderId = null; // Pasta sendo visualizada
+        let knowledgeBase = [];
+        let folders = [];
+        let activeFolderId = null;
         
-        let isRecording = false;
-        let mediaRecorder;
-        let audioChunks = [];
-        // Modelo que VOCÊ pediu (TinyLlama 1.1B)
-        const MODEL_ID = "TinyLlama-1.1B-Chat-v1.0-q4f32_1";
+        // Modelo gratuito do HuggingFace (não precisa de key para uso básico)
+        const HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
+        const HF_API = "https://api-inference.huggingface.co/models/" + HF_MODEL;
 
         /* ═══════════════════════════════════════════
-           2. BANCO DE DADOS (INDEXEDDB)
+           BANCO DE DADOS (INDEXEDDB)
            ═══════════════════════════════════════════ */
-        function initDB() {
-            return new Promise(resolve => {
-                const req = indexedDB.open('DiamanteDB_v3', 3);
+        function initDB() {            return new Promise(resolve => {
+                const req = indexedDB.open('DiamanteDB_v5', 1);
                 req.onupgradeneeded = e => {
                     const d = e.target.result;
-                    if(!d.objectStoreNames.contains('knowledge')) {
-                        d.createObjectStore('knowledge', { keyPath: 'id', autoIncrement: true });
-                    }
-                    if(!d.objectStoreNames.contains('folders')) {
-                        d.createObjectStore('folders', { keyPath: 'id', autoIncrement: true });
-                    }
+                    if(!d.objectStoreNames.contains('knowledge')) d.createObjectStore('knowledge', { keyPath: 'id', autoIncrement: true });
+                    if(!d.objectStoreNames.contains('folders')) d.createObjectStore('folders', { keyPath: 'id', autoIncrement: true });
                 };
                 req.onsuccess = e => {
                     db = e.target.result;
@@ -222,8 +162,7 @@
         function salvarDB(store, data) {
             return new Promise(resolve => {
                 const tx = db.transaction(store, 'readwrite');
-                const req = tx.objectStore(store).add(data);
-                req.onsuccess = e => resolve(e.target.result);
+                tx.objectStore(store).add(data).onsuccess = e => resolve(e.target.result);
             });
         }
 
@@ -243,81 +182,52 @@
                 renderFolderSelect();
             };
         }
+
         /* ═══════════════════════════════════════════
-           3. IA (WEBLLM - TINYLLAMA)
+           IA VIA API GRATUITA (SEM WEBGPU)
            ═══════════════════════════════════════════ */
-        const statusDot = document.querySelector('.dot');
-        const statusText = document.getElementById('aiStatus');
-        const progressBar = document.getElementById('progressBar');
-
-        async function carregarIA() {
-            if(engine) return;
-            statusDot.className = 'dot load';
-            statusText.innerHTML = 'Baixando IA...';
-            document.getElementById('progressWrap').style.display = 'block';
-
-            try {
-                // Cria a engine usando a lib web-llm
-                engine = await webllm.CreateMLCEngine(MODEL_ID, {
-                    initProgressCallback: report => {
-                        const pct = Math.round(report.progress * 100);
-                        progressBar.style.width = pct + '%';
-                        statusText.innerHTML = `IA: ${pct}%`;
-                    }
-                });
-
-                statusDot.className = 'dot ready';
-                statusText.innerHTML = 'IA Pronta';
-                document.getElementById('progressWrap').style.display = 'none';
-                addBubble("💎 **Sistema Online.**\nIA TinyLlama carregada e pronta.", 'bot');
-            } catch(e) {
-                statusDot.style.background = 'red';
-                statusText.innerHTML = 'Erro IA';
-                console.error(e);
-                addBubble("⚠️ Erro ao carregar a IA (WebGPU pode não ser suportado neste celular). O sistema funcionará apenas com busca simples.", 'bot');
-            }
-        }
-
         async function pedirIA(pergunta, contextoRAG = "") {
-            if (!engine) {
-                // Se a IA não carregou, usa a lógica simples
-                return buscarSimples(pergunta);
-            }
-
             let prompt = "";
             if (contextoRAG) {
-                prompt = `Você é um assistente útil. Responda usando APENAS o contexto abaixo. Se não estiver no contexto, diga que não sabe.
---- CONTEXTO ---
-${contextoRAG}
---- FIM ---
-Pergunta: ${pergunta}`;
+                prompt = `<s>[INST] Use APENAS o contexto abaixo para responder. Se não souber, diga que não sabe.\nContexto: ${contextoRAG}\nPergunta: ${pergunta} [/INST]`;
             } else {
-                prompt = `Você é um assistente amigável. Responda a pergunta: ${pergunta}`;            }
+                prompt = `<s>[INST] Responda de forma útil e direta em português: ${pergunta} [/INST]`;
+            }
 
-            try {
-                const resposta = await engine.chat.completions.create({
-                    messages: [{ role: "user", content: prompt }],
-                    max_tokens: 300,
-                    temperature: 0.3
+            try {                const response = await fetch(HF_API, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        inputs: prompt,
+                        parameters: { max_new_tokens: 300, temperature: 0.4 }
+                    })
                 });
-                return resposta.choices[0].message.content;
+
+                if (!response.ok) throw new Error("API ocupada ou indisponível");
+                
+                const data = await response.json();
+                // A API retorna array com generated_text
+                let texto = data[0]?.generated_text || "";
+                
+                // Limpa o prompt da resposta se vier junto
+                if(texto.includes("[/INST]")) {
+                    texto = texto.split("[/INST]").pop().trim();
+                }
+                
+                return texto || "Sem resposta da IA.";
             } catch(e) {
-                return "Erro ao gerar resposta da IA.";
+                console.error(e);
+                // Fallback inteligente caso a API falhe
+                return buscarSimples(pergunta) + "\n\n_(IA Cloud temporariamente offline)_";
             }
         }
 
         /* ═══════════════════════════════════════════
-           4. LÓGICA RAG (BUSCA INTELIGENTE)
+           RAG LOCAL (BUSCA NA MEMÓRIA)
            ═══════════════════════════════════════════ */
-        // Busca real, sem mentir se não achar
         function buscarContexto(query) {
             if(!query) return "";
-            
-            // Filtra pela pasta ativa se houver
-            const base = activeFolderId 
-                ? knowledgeBase.filter(k => k.folderId == activeFolderId) 
-                : knowledgeBase;
-
+            const base = activeFolderId ? knowledgeBase.filter(k => k.folderId == activeFolderId) : knowledgeBase;
             const termos = query.toLowerCase().split(/\s+/);
             let melhores = [];
 
@@ -325,62 +235,29 @@ Pergunta: ${pergunta}`;
                 if(!doc.texto) return;
                 let score = 0;
                 const txt = doc.texto.toLowerCase();
-                termos.forEach(t => {
-                    if(txt.includes(t)) score += 10;
-                });
-                // Se a frase for parecida, dá mais pontos
+                termos.forEach(t => { if(txt.includes(t)) score += 10; });
                 if(txt.includes(query)) score += 50;
-
                 if(score > 0) melhores.push({score, texto: doc.texto});
             });
 
-            // Só retorna se tiver score real > 0
             return melhores.sort((a,b) => b.score - a.score).slice(0, 3).map(m => m.texto).join("\n\n");
         }
 
-        function buscarSimples(pergunta) {
-            const ctx = buscarContexto(pergunta);
-            if(ctx) return `Encontrei isso na memória:\n"${ctx.substring(0, 200)}..."`;
-            return "Ainda não tenho isso na memória. Pode me ensinar?";        }
+        function buscarSimples(pergunta) {            const ctx = buscarContexto(pergunta);
+            return ctx ? `Encontrei na memória:\n"${ctx.substring(0, 200)}..."` : "Não tenho isso na memória ainda.";
+        }
 
         /* ═══════════════════════════════════════════
-           5. INTERFACE & FUNÇÕES
+           INTERFACE & CHAT
            ═══════════════════════════════════════════ */
-        function addBubble(texto, tipo = 'bot', extra = null) {
+        function addBubble(texto, tipo = 'bot') {
             const chat = document.getElementById('chatArea');
             const div = document.createElement('div');
             div.className = `bubble bubble-${tipo}`;
-            
-            // Formatação Markdown simples
-            let html = texto.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
-            div.innerHTML = `<div>${html}</div>`;
-            
-            if(extra && extra.tipo === 'audio') {
-                div.innerHTML += `<div class="audio-wrap"><audio controls src="${extra.url}"></audio></div>`;
-            }
-            if(tipo === 'bot') {
-                div.innerHTML += `<button class="copy-btn" onclick="copiar(this)">📋 Copiar</button>`;
-                falarTexto(texto);
-            }
-
+            div.innerHTML = `<div>${texto.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>`;
+            if(tipo === 'bot') div.innerHTML += `<button class="copy-btn" onclick="copiar(this)">📋 Copiar</button>`;
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
-        }
-
-        function addTyping() {
-            const chat = document.getElementById('chatArea');
-            const div = document.createElement('div');
-            div.className = 'bubble bubble-in';
-            div.id = 'typingLoader';
-            div.style.opacity = '0.6';
-            div.innerText = '🧠 Processando...';
-            chat.appendChild(div);
-            chat.scrollTop = chat.scrollHeight;
-        }
-
-        function removeTyping() {
-            const el = document.getElementById('typingLoader');
-            if(el) el.remove();
         }
 
         async function sendMessage() {
@@ -390,77 +267,46 @@ Pergunta: ${pergunta}`;
 
             addBubble(txt, 'user');
             inp.value = '';
-            inp.style.height = 'auto';
-            // Salvar no DB
-            if(document.getElementById('learnCheck').checked) {
-                const id = await salvarDB('knowledge', {
-                    texto: txt, folderId: activeFolderId, tipo: 'texto', data: new Date().toISOString()
-                });
-                knowledgeBase.push({id, texto: txt, folderId: activeFolderId, tipo: 'texto'});
-            }
+            
+            // Salvar no DB local
+            salvarDB('knowledge', { texto: txt, folderId: activeFolderId, data: new Date().toISOString() })
+                .then(id => knowledgeBase.push({id, texto: txt, folderId: activeFolderId}));
 
-            // RAG + IA
-            addTyping();
+            // Loading visual
+            const loading = document.createElement('div');
+            loading.className = 'bubble bubble-in';
+            loading.style.opacity = '0.6';
+            loading.innerText = '🧠 Processando na nuvem...';
+            document.getElementById('chatArea').appendChild(loading);
+
             const contexto = buscarContexto(txt);
             const resp = await pedirIA(txt, contexto);
-            removeTyping();
+            
+            loading.remove();
             addBubble(resp, 'bot');
         }
 
-        // Input Enter
         document.getElementById('messageInput').addEventListener('keydown', e => {
             if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         });
 
         function copiar(btn) {
-            const txt = btn.parentElement.innerText.replace('📋 Copiar','').trim();
-            navigator.clipboard.writeText(txt);
-            btn.innerText = '✅ Copiado!';
-            setTimeout(() => btn.innerText = '📋 Copiar', 2000);
-        }
-
-        // VOZ
-        function falarTexto(txt) {
-            if(!document.getElementById('voiceCheck').checked) return;
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(txt.replace(/[#*_~]/g,''));
-            u.lang = 'pt-BR';
-            // Tenta pegar voz Google
-            const vozes = window.speechSynthesis.getVoices();
-            const vozMelhor = vozes.find(v => v.name.includes('Google') && v.lang.includes('pt'));
-            if(vozMelhor) u.voice = vozMelhor;
-            window.speechSynthesis.speak(u);
-        }
-
-        // ÁUDIO
-        async function toggleRecord() {
-            const btn = document.getElementById('recBtn');
-            if(!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                    mediaRecorder.onstop = () => {
-                        const blob = new Blob(audioChunks, {type:'audio/webm'});
-                        const url = URL.createObjectURL(blob);
-                        addBubble("🎙️ Gravado", 'user', {tipo:'audio', url});
-                        // Salva referencia
-                        salvarDB('knowledge', {texto: "Gravação", folderId: activeFolderId, tipo:'audio', data: new Date().toISOString()});
-                    };
-                    mediaRecorder.start();
-                    isRecording = true;
-                    btn.classList.add('recording');
-                } catch(e) { alert("Erro: Microfone bloqueado."); }
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                btn.classList.remove('recording');
-            }
+            navigator.clipboard.writeText(btn.parentElement.innerText.replace('📋 Copiar',''));
+            btn.innerText = '✅';            setTimeout(() => btn.innerText = '📋 Copiar', 2000);
         }
 
         /* ═══════════════════════════════════════════
-           6. PASTAS (COMPLETO)
+           PASTAS & UTILITÁRIOS
            ═══════════════════════════════════════════ */
+        function togglePanel(id) { document.getElementById(id).classList.toggle('show'); }
+        function limparChat() { document.getElementById('chatArea').innerHTML = ''; togglePanel('configPanel'); }
+        function resetTotal() { 
+            if(confirm("Apagar TUDO?")) { 
+                indexedDB.deleteDatabase('DiamanteDB_v5'); 
+                location.reload(); 
+            } 
+        }
+
         function renderFolders() {
             const list = document.getElementById('foldersList');
             list.innerHTML = '';
@@ -469,10 +315,7 @@ Pergunta: ${pergunta}`;
                 const div = document.createElement('div');
                 div.className = 'folder-item';
                 div.innerHTML = `
-                    <div onclick="abrirPasta(${f.id})">
-                        <b style="color:var(--neon)">📁 ${f.nome}</b><br>
-                        <small style="color:var(--muted)">${count} itens</small>
-                    </div>
+                    <div><b>📁 ${f.nome}</b><br><small style="color:var(--muted)">${count} itens</small></div>
                     <button class="btn-icon" style="color:var(--pink)" onclick="deletarPasta(${f.id})">✕</button>
                 `;
                 list.appendChild(div);
@@ -482,14 +325,10 @@ Pergunta: ${pergunta}`;
         function renderFolderSelect() {
             const sel = document.getElementById('activeFolderSelect');
             sel.innerHTML = '<option value="">📂 Global (Todas)</option>';
-            folders.forEach(f => {
-                sel.innerHTML += `<option value="${f.id}">📁 ${f.nome}</option>`;
-            });
-            if(activeFolderId) sel.value = activeFolderId;
+            folders.forEach(f => sel.innerHTML += `<option value="${f.id}">📁 ${f.nome}</option>`);
         }
 
-        function setActiveFolder(val) {            activeFolderId = val ? parseInt(val) : null;
-        }
+        function setActiveFolder(val) { activeFolderId = val ? parseInt(val) : null; }
 
         async function criarPastaPrompt() {
             const nome = prompt("Nome da Pasta:");
@@ -501,70 +340,18 @@ Pergunta: ${pergunta}`;
             }
         }
 
-        function abrirPasta(id) {
-            currentViewFolderId = id;
-            const pasta = folders.find(f => f.id == id);
-            document.getElementById('viewFolderTitle').innerText = `📂 ${pasta.nome}`;
-            const list = document.getElementById('folderContentList');
-            list.innerHTML = '';
-            
-            const itens = knowledgeBase.filter(k => k.folderId == id);
-            itens.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'folder-item';
-                div.innerHTML = `<span>${item.texto.substring(0,40)}...</span> <button style="color:red;background:none;border:none" onclick="delItem(${item.id})">🗑️</button>`;
-                list.appendChild(div);
-            });
-            
-            if(itens.length === 0) list.innerHTML = '<p style="color:var(--muted)">Pasta vazia.</p>';
-            
-            document.getElementById('deleteFolderBtn').onclick = async () => {
-                if(confirm("Apagar pasta inteira?")) {
-                    for(let i of itens) await deletarDB('knowledge', i.id);
-                    await deletarDB('folders', id);
-                    await carregarDados();
-                    togglePanel('folderContentPanel');
-                }
-            };
-            
-            togglePanel('folderContentPanel');
-        }
-
-        async function delItem(id) {
-            await deletarDB('knowledge', id);
-            knowledgeBase = knowledgeBase.filter(k => k.id !== id);
-            abrirPasta(currentViewFolderId); // Refresh
-            renderFolders();
-        }
-
-        /* ═══════════════════════════════════════════           7. UTILITÁRIOS
-           ═══════════════════════════════════════════ */
-        function togglePanel(id) {
-            document.getElementById(id).classList.toggle('show');
-        }
-        
-        function reiniciarIA() {
-            engine = null;
-            carregarIA();
-        }
-        
-        function limparChat() {
-            document.getElementById('chatArea').innerHTML = '';
-            togglePanel('configPanel');
-        }
-
-        function resetTotal() {
-            if(confirm("Apagar TUDO? Não tem volta.")) {
-                indexedDB.deleteDatabase('DiamanteDB_v3');
-                location.reload();
+        async function deletarPasta(id) {
+            if(confirm("Apagar pasta?")) {                await deletarDB('folders', id);
+                folders = folders.filter(f => f.id !== id);
+                renderFolders();
+                renderFolderSelect();
             }
         }
 
         // INIT
         window.onload = async () => {
             await initDB();
-            carregarIA(); // Inicia o download da IA leve
-            addBubble("💎 **DiamanteBlack Iniciado.**\nBaixando modelo TinyLlama... Aguarde o sinal verde.", 'bot');
+            addBubble("💎 **DiamanteBlack Online.**\nUsando IA na nuvem (Mistral-7B). Funciona em qualquer celular!", 'bot');
         };
     </script>
 </body>
